@@ -5,7 +5,11 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/ioctl.h>
 
+#define BUFSIZE 32
+#define WR_VALUE _IOW('a','a',char*)
+#define RD_VALUE _IOR('a','b',char*)
 
 MODULE_AUTHOR("Paul Beneteau");
 MODULE_LICENSE("GPL");
@@ -13,6 +17,7 @@ MODULE_DESCRIPTION("MFRC522 driver");
 
 struct mfrc522_dev {
         struct cdev cdev;
+        char buf[BUFSIZE];
 };
 
 static int major;
@@ -20,13 +25,17 @@ static struct mfrc522_dev *rdev;
 
 static long mfrc522_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-  	pr_info("start ioct");
 	switch(cmd) {
-		case 0:
-			pr_info("ioctl0");
+	  	// Write user data in buffer
+		case WR_VALUE:
+			// Set buffer to {0} and copy user data
+			memset(rdev->buf, 0, BUFSIZE);
+			copy_from_user(rdev->buf, (char*)arg, BUFSIZE);
+			//pr_info("Value: %s\n", rdev->buf);
 			break;
-		case 1:
-			pr_info("ioctl1");
+		// Read buffer for user
+		case RD_VALUE:
+			copy_to_user((char*)arg, rdev->buf, BUFSIZE);
 			break;
 	}
 	return 0;
@@ -44,7 +53,8 @@ static int mfrc522_dev_init(struct mfrc522_dev **rdev) {
 	if (*rdev == NULL) {
                 return -ENOMEM;
         }
-
+	
+	memset((*rdev)->buf, 0, BUFSIZE);
         (*rdev)->cdev.owner = THIS_MODULE;
         cdev_init(&(*rdev)->cdev, &mfrc522_fops);
 
@@ -64,7 +74,7 @@ static int mfrc522_init(void) {
         }
         else {
                 major = MAJOR(dev);
-                pr_info("Got major %d", major);
+                pr_info("!Got major %d", major);
         }
 
         if (mfrc522_dev_init(&rdev) < 0) {
